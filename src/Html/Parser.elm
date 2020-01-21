@@ -1,5 +1,5 @@
 module Html.Parser exposing
-    ( run, Node(..), Attribute
+    ( run, runComplex, Node(..), Attribute
     , node, nodeToString
     )
 
@@ -20,26 +20,44 @@ you need to parse HTML... This section is for you!
 
 -}
 
-import Dict exposing (Dict)
+import Dict
 import Hex
 import Html.Parser.NamedCharacterReferences as NamedCharacterReferences
 import Parser exposing ((|.), (|=), Parser)
+import Debug exposing (toString)
 
 
 {-| Run the parser!
 
     run "<div><p>Hello, world!</p></div>"
-    -- => Ok [ Element "div" [] [ Element "p" [] [ Text "Hello, world!" ] ] ]
+    -- => Ok [ Element "div" [] [ Element "p" [] [ Leaf "Hello, world!" ] ] ]
 
 -}
-run : String -> Result (List Parser.DeadEnd) (List Node)
+run : String -> Result (List Parser.DeadEnd) (List (Node String))
 run str =
     if String.isEmpty str then
         Ok []
 
     else
-        Parser.run (oneOrMore "node" node) str
+        Parser.run (oneOrMore "node" (node identity (++) "")) str
 
+{-| Run the parser!
+
+    runComplex "<div><p>5</p></div>" (String.toInt >> withDefault 0) (+) 0
+    -- => Ok [ Element "div" [] [ Element "p" [] [ Leaf 5 ] ] ]
+
+-}
+runComplex : String
+           -> (String -> a)
+           -> (a -> a -> a)
+           -> a
+           -> Result (List Parser.DeadEnd) (List (Node a))
+runComplex input convert combine init =
+    if String.isEmpty input then
+        Ok []
+
+    else
+        Parser.run (oneOrMore "node" (node convert combine init)) input
 
 
 -- Node
@@ -52,9 +70,9 @@ run str =
   - Comment
 
 -}
-type Node
-    = Text String
-    | Element String (List Attribute) (List Node)
+type Node a
+    = Leaf a
+    | Element String (List Attribute) (List (Node a))
     | Comment String
 
 
@@ -72,12 +90,12 @@ type alias Attribute =
 You can use this in your own parser to add support for HTML 5.
 
 -}
-node : Parser Node
-node =
+node : (String -> a) -> (a -> a -> a) -> a -> Parser (Node a)
+node convert combine init =
     Parser.oneOf
-        [ text
+        [ leaf convert combine init
         , comment
-        , element
+        , element convert combine init
         ]
 
 
@@ -93,15 +111,15 @@ For instance:
 Produces `<a href="https://elm-lang.org">Elm</a>`.
 
 -}
-nodeToString : Node -> String
+nodeToString : Node a -> String
 nodeToString node_ =
     let
         attributeToString ( attr, value ) =
             attr ++ "=\"" ++ value ++ "\""
     in
     case node_ of
-        Text text_ ->
-            text_
+        Leaf leaf_ ->
+            toString leaf_
 
         Element name attributes children ->
             let
@@ -141,14 +159,14 @@ nodeToString node_ =
 -- Text
 
 
-text : Parser Node
-text =
+leaf : (String -> a) -> (a -> a -> a) -> a -> Parser (Node a)
+leaf convert combine initial=
     Parser.oneOf
-        [ Parser.getChompedString (chompOneOrMore (\c -> c /= '<' && c /= '&'))
-        , characterReference
+        [ Parser.map convert (Parser.getChompedString (chompOneOrMore (\c -> c /= '<' && c /= '&')))
+        , Parser.map convert characterReference
         ]
-        |> oneOrMore "text element"
-        |> Parser.map (String.join "" >> Text)
+        |> oneOrMore "leaf element"
+        |> Parser.map (Leaf << List.foldl combine initial)
 
 
 characterReference : Parser String
@@ -196,8 +214,8 @@ numericCharacterReference =
 -- Element
 
 
-element : Parser Node
-element =
+element : (String -> a) -> (a -> a -> a) -> a -> Parser (Node a)
+element convert combine init =
     Parser.succeed Tuple.pair
         |. Parser.chompIf ((==) '<')
         |= tagName
@@ -216,7 +234,7 @@ element =
                 else
                     Parser.succeed (Element name attributes)
                         |. Parser.chompIf ((==) '>')
-                        |= many (Parser.backtrackable node)
+                        |= many (Parser.backtrackable (node convert combine init))
                         |. closingTag name
             )
 
@@ -324,7 +342,7 @@ closingTag name =
 -- Comment
 
 
-comment : Parser Node
+comment : Parser (Node a)
 comment =
     Parser.succeed Comment
         |. Parser.token "<!"

@@ -1,18 +1,17 @@
 module Main exposing (suite)
 
-import Dict
 import Expect exposing (Expectation)
 import Html.Parser exposing (Node(..))
 import Test exposing (Test, describe, test)
 
 
-testParseAll : String -> List Node -> (() -> Expectation)
+testParseAll : String -> List (Node String) -> (() -> Expectation)
 testParseAll s astList =
     \_ ->
         Expect.equal (Ok astList) (Html.Parser.run s)
 
 
-testParse : String -> Node -> (() -> Expectation)
+testParse : String -> Node String -> (() -> Expectation)
 testParse s ast =
     testParseAll s [ ast ]
 
@@ -36,26 +35,26 @@ textNodeTests : Test
 textNodeTests =
     describe "TextNode"
         [ test "empty" (testParseAll "" [])
-        , test "space" (testParse " " (Text " "))
-        , test "basic1" (testParse "1" (Text "1"))
-        , test "basic2" (testParse "a" (Text "a"))
-        , test "basic3" (testParse "1a" (Text "1a"))
-        , test "basic4" (testParse "^" (Text "^"))
-        , test "decode1" (testParse "&" (Text "&"))
-        , test "decode2" (testParse "&amp;" (Text "&"))
-        , test "decode3" (testParse "&lt;" (Text "<"))
-        , test "decode4" (testParse "&gt;" (Text ">"))
-        , test "decode6" (testParse "&apos;" (Text "'"))
-        , test "decode7" (testParse "&#38;" (Text "&"))
-        , test "decode8" (testParse "&#x26;" (Text "&"))
-        , test "decode9" (testParse "&#x3E;" (Text ">"))
-        , test "decodeA" (testParse "&#383;" (Text "ſ"))
-        , test "decodeB" (testParse "&nbsp;" (Text "\u{00A0}"))
-        , test "decodeC" (testParse "&nbsp;&nbsp;" (Text "\u{00A0}\u{00A0}"))
-        , test "decodeD" (testParse "a&nbsp;b" (Text "a\u{00A0}b"))
-        , test "decodeE" (testParse "a&nbsp;&nbsp;b" (Text "a\u{00A0}\u{00A0}b"))
+        , test "space" (testParse " " (Leaf " "))
+        , test "basic1" (testParse "1" (Leaf "1"))
+        , test "basic2" (testParse "a" (Leaf "a"))
+        , test "basic3" (testParse "1a" (Leaf "1a"))
+        , test "basic4" (testParse "^" (Leaf "^"))
+        , test "decode1" (testParse "&" (Leaf "&"))
+        , test "decode2" (testParse "&amp;" (Leaf "&"))
+        , test "decode3" (testParse "&lt;" (Leaf "<"))
+        , test "decode4" (testParse "&gt;" (Leaf ">"))
+        , test "decode6" (testParse "&apos;" (Leaf "'"))
+        , test "decode7" (testParse "&#38;" (Leaf "&"))
+        , test "decode8" (testParse "&#x26;" (Leaf "&"))
+        , test "decode9" (testParse "&#x3E;" (Leaf ">"))
+        , test "decodeA" (testParse "&#383;" (Leaf "ſ"))
+        , test "decodeB" (testParse "&nbsp;" (Leaf "\u{00A0}"))
+        , test "decodeC" (testParse "&nbsp;&nbsp;" (Leaf "\u{00A0}\u{00A0}"))
+        , test "decodeD" (testParse "a&nbsp;b" (Leaf "a\u{00A0}b"))
+        , test "decodeE" (testParse "a&nbsp;&nbsp;b" (Leaf "a\u{00A0}\u{00A0}b"))
         , test "decodeF" (testParse """<img alt="&lt;">""" (Element "img" [ ( "alt", "<" ) ] []))
-        , test "decodeG" (testParse "&#0038;" (Text "&"))
+        , test "decodeG" (testParse "&#0038;" (Leaf "&"))
         ]
 
 
@@ -65,15 +64,15 @@ nodeTests =
         [ test "basic1" (testParse "<a></a>" (Element "a" [] []))
         , test "basic2" (testParse "<a></a >" (Element "a" [] []))
         , test "basic3" (testParse "<A></A >" (Element "a" [] []))
-        , test "basic4" (testParseAll " <a></a> " [ Text " ", Element "a" [] [], Text " " ])
-        , test "basic5" (testParseAll "a<a></a>b" [ Text "a", Element "a" [] [], Text "b" ])
+        , test "basic4" (testParseAll " <a></a> " [ Leaf " ", Element "a" [] [], Leaf " " ])
+        , test "basic5" (testParseAll "a<a></a>b" [ Leaf "a", Element "a" [] [], Leaf "b" ])
         , test "basic6" (testParse "<A></A>" (Element "a" [] []))
-        , test "basic7" (testParse "<a>a</a>" (Element "a" [] [ Text "a" ]))
-        , test "basic8" (testParse "<a> a </a>" (Element "a" [] [ Text " a " ]))
+        , test "basic7" (testParse "<a>a</a>" (Element "a" [] [ Leaf "a" ]))
+        , test "basic8" (testParse "<a> a </a>" (Element "a" [] [ Leaf " a " ]))
         , test "basic10" (testParse "<br>" (Element "br" [] []))
         , test "basic11" (testParse "<a><a></a></a>" (Element "a" [] [ Element "a" [] [] ]))
-        , test "basic12" (testParse "<a> <a> </a> </a>" (Element "a" [] [ Text " ", Element "a" [] [ Text " " ], Text " " ]))
-        , test "basic13" (testParse "<a> <br> </a>" (Element "a" [] [ Text " ", Element "br" [] [], Text " " ]))
+        , test "basic12" (testParse "<a> <a> </a> </a>" (Element "a" [] [ Leaf " ", Element "a" [] [ Leaf " " ], Leaf " " ]))
+        , test "basic13" (testParse "<a> <br> </a>" (Element "a" [] [ Leaf " ", Element "br" [] [], Leaf " " ]))
         , test "basic14" (testParse "<a><a></a><a></a></a>" (Element "a" [] [ Element "a" [] [], Element "a" [] [] ]))
         , test "basic15" (testParse "<a><a><a></a></a></a>" (Element "a" [] [ Element "a" [] [ Element "a" [] [] ] ]))
         , test "basic16" (testParse "<a><a></a><b></b></a>" (Element "a" [] [ Element "a" [] [], Element "b" [] [] ]))
@@ -82,10 +81,10 @@ nodeTests =
         , test "start-only-tag2" (testParse "<BR>" (Element "br" [] []))
         , test "start-only-tag3" (testParse "<br >" (Element "br" [] []))
         , test "start-only-tag4" (testParse "<BR >" (Element "br" [] []))
-        , test "start-only-tag5" (testParse "<a> <br> </a>" (Element "a" [] [ Text " ", Element "br" [] [], Text " " ]))
+        , test "start-only-tag5" (testParse "<a> <br> </a>" (Element "a" [] [ Leaf " ", Element "br" [] [], Leaf " " ]))
         , test "start-only-tag6" (testParse "<a><br><br></a>" (Element "a" [] [ Element "br" [] [], Element "br" [] [] ]))
         , test "start-only-tag7" (testParse "<a><br><img><hr><meta></a>" (Element "a" [] [ Element "br" [] [], Element "img" [] [], Element "hr" [] [], Element "meta" [] [] ]))
-        , test "start-only-tag8" (testParse "<a>foo<br>bar</a>" (Element "a" [] [ Text "foo", Element "br" [] [], Text "bar" ]))
+        , test "start-only-tag8" (testParse "<a>foo<br>bar</a>" (Element "a" [] [ Leaf "foo", Element "br" [] [], Leaf "bar" ]))
         , test "self-closing-tag1" (testParse "<br/>" (Element "br" [] []))
         , test "self-closing-tag2" (testParse "<br />" (Element "br" [] []))
         , test "self-closing-tag3" (testParse "<link href=\"something\" rel=\"something else\"/>" (Element "link" [ ( "href", "something" ), ( "rel", "something else" ) ] []))
@@ -98,15 +97,15 @@ nodeToStringTests =
     describe "nodeToString"
         [ test "simple link" <|
             \_ ->
-                Element "a" [ ( "href", "https://elm-lang.org" ) ] [ Text "Elm" ]
+                Element "a" [ ( "href", "https://elm-lang.org" ) ] [ Leaf "Elm" ]
                     |> Html.Parser.nodeToString
                     |> Expect.equal "<a href=\"https://elm-lang.org\">Elm</a>"
         , test "container" <|
             \_ ->
                 Element "div"
                     []
-                    [ Element "p" [] [ Text "Hello," ]
-                    , Element "p" [] [ Text "World!" ]
+                    [ Element "p" [] [ Leaf "Hello," ]
+                    , Element "p" [] [ Leaf "World!" ]
                     ]
                     |> Html.Parser.nodeToString
                     |> Expect.equal "<div><p>Hello,</p><p>World!</p></div>"
@@ -116,12 +115,12 @@ nodeToStringTests =
                     [ ( "href", "https://elm-lang.org" )
                     , ( "alt", "Elm website" )
                     ]
-                    [ Text "Elm" ]
+                    [ Leaf "Elm" ]
                     |> Html.Parser.nodeToString
                     |> Expect.equal "<a href=\"https://elm-lang.org\" alt=\"Elm website\">Elm</a>"
         , test "void element" <|
             \_ ->
-                Element "br" [] [ Element "a" [] [ Text "should be ignored" ] ]
+                Element "br" [] [ Element "a" [] [ Leaf "should be ignored" ] ]
                     |> Html.Parser.nodeToString
                     |> Expect.equal "<br>"
         , test "comment" <|
@@ -131,7 +130,7 @@ nodeToStringTests =
                     |> Expect.equal "<!-- This is a comment -->"
         , test "text" <|
             \_ ->
-                Text "Hello, world!"
+                Leaf "Hello, world!"
                     |> Html.Parser.nodeToString
                     |> Expect.equal "Hello, world!"
         ]
@@ -142,11 +141,11 @@ scriptTests =
     describe "Script"
         [ test "script1" (testParse """<script></script>""" (Element "script" [] []))
         , test "script2" (testParse """<SCRIPT></SCRIPT>""" (Element "script" [] []))
-        , test "script3" (testParse """<script src="script.js">foo</script>""" (Element "script" [ ( "src", "script.js" ) ] [ Text "foo" ]))
-        , test "script4" (testParse """<script>var a = 0 < 1; b = 1 > 0;</script>""" (Element "script" [] [ Text "var a = 0 < 1; b = 1 > 0;" ]))
+        , test "script3" (testParse """<script src="script.js">foo</script>""" (Element "script" [ ( "src", "script.js" ) ] [ Leaf "foo" ]))
+        , test "script4" (testParse """<script>var a = 0 < 1; b = 1 > 0;</script>""" (Element "script" [] [ Leaf "var a = 0 < 1; b = 1 > 0;" ]))
         , test "script5" (testParse """<script><!----></script>""" (Element "script" [] [ Comment "" ]))
-        , test "script6" (testParse """<script>a<!--</script><script>-->b</script>""" (Element "script" [] [ Text "a", Comment "</script><script>", Text "b" ]))
-        , test "style" (testParse """<style>a<!--</style><style>-->b</style>""" (Element "style" [] [ Text "a", Comment "</style><style>", Text "b" ]))
+        , test "script6" (testParse """<script>a<!--</script><script>-->b</script>""" (Element "script" [] [ Leaf "a", Comment "</script><script>", Leaf "b" ]))
+        , test "style" (testParse """<style>a<!--</style><style>-->b</style>""" (Element "style" [] [ Leaf "a", Comment "</style><style>", Leaf "b" ]))
         ]
 
 
