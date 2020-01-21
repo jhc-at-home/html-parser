@@ -3,6 +3,7 @@ module Main exposing (suite)
 import Expect exposing (Expectation)
 import Html.Parser exposing (Node(..))
 import Test exposing (Test, describe, test)
+import Json.Decode as Decode exposing (Decoder)
 
 
 testParseAll : String -> List (Node String) -> (() -> Expectation)
@@ -15,6 +16,16 @@ testParse : String -> Node String -> (() -> Expectation)
 testParse s ast =
     testParseAll s [ ast ]
 
+
+testParseComplex : (String -> a)
+                 -> (a -> a -> a)
+                 -> a
+                 -> String
+                 -> Node a
+                 -> (() -> Expectation)
+testParseComplex convert combine empty s ast =
+    \_ ->
+        Expect.equal (Ok [ ast ]) (Html.Parser.runComplex convert combine empty s)
 
 testError : String -> (() -> Expectation)
 testError s =
@@ -55,6 +66,46 @@ textNodeTests =
         , test "decodeE" (testParse "a&nbsp;&nbsp;b" (Leaf "a\u{00A0}\u{00A0}b"))
         , test "decodeF" (testParse """<img alt="&lt;">""" (Element "img" [ ( "alt", "<" ) ] []))
         , test "decodeG" (testParse "&#0038;" (Leaf "&"))
+        ]
+
+type alias ExampleTestType =
+    { name : String
+    , age : Int
+    }
+
+complexObjTests : Test
+complexObjTests =
+    let
+        complex : String -> Result Decode.Error ExampleTestType
+        complex = Decode.decodeString (Decode.map2
+                                            ExampleTestType
+                                            (Decode.field "name" Decode.string)
+                                            (Decode.field "age" Decode.int))
+        convert : String -> ExampleTestType
+        convert str =
+            case complex str of
+                Ok (val) -> val
+                Err _ -> ExampleTestType "" 0
+
+        combine : ExampleTestType -> ExampleTestType -> ExampleTestType
+        combine a b =
+            { a | name = a.name ++ b.name,
+                  age = a.age + b.age }
+
+        empty : ExampleTestType
+        empty = { name = "", age = 0 }
+
+        complexTest : String -> Node ExampleTestType -> (() -> Expectation)
+        complexTest = testParseComplex convert combine empty
+
+    in
+    describe "ComplexNode"
+        [ test "leaf" (complexTest "{\"name\": \"aname\", \"age\": 5}"
+                           (Leaf {name = "aname", age = 5}))
+        , test "basic" (complexTest "<a>{\"name\": \"aname\", \"age\": 1}</a>"
+                            (Element "a" [] [ Leaf {name = "aname", age = 1} ]))
+        , test "failure" (complexTest "<a> </a>"
+                              (Element "a" [] [ Leaf empty ]))
         ]
 
 
@@ -98,7 +149,7 @@ nodeToStringTests =
         [ test "simple link" <|
             \_ ->
                 Element "a" [ ( "href", "https://elm-lang.org" ) ] [ Leaf "Elm" ]
-                    |> Html.Parser.nodeToString
+                    |> Html.Parser.nodeToString identity
                     |> Expect.equal "<a href=\"https://elm-lang.org\">Elm</a>"
         , test "container" <|
             \_ ->
@@ -107,7 +158,7 @@ nodeToStringTests =
                     [ Element "p" [] [ Leaf "Hello," ]
                     , Element "p" [] [ Leaf "World!" ]
                     ]
-                    |> Html.Parser.nodeToString
+                    |> Html.Parser.nodeToString identity
                     |> Expect.equal "<div><p>Hello,</p><p>World!</p></div>"
         , test "multiple attributes" <|
             \_ ->
@@ -116,23 +167,28 @@ nodeToStringTests =
                     , ( "alt", "Elm website" )
                     ]
                     [ Leaf "Elm" ]
-                    |> Html.Parser.nodeToString
+                    |> Html.Parser.nodeToString identity
                     |> Expect.equal "<a href=\"https://elm-lang.org\" alt=\"Elm website\">Elm</a>"
         , test "void element" <|
             \_ ->
                 Element "br" [] [ Element "a" [] [ Leaf "should be ignored" ] ]
-                    |> Html.Parser.nodeToString
+                    |> Html.Parser.nodeToString identity
                     |> Expect.equal "<br>"
         , test "comment" <|
             \_ ->
                 Comment "This is a comment"
-                    |> Html.Parser.nodeToString
+                    |> Html.Parser.nodeToString identity
                     |> Expect.equal "<!-- This is a comment -->"
         , test "text" <|
             \_ ->
                 Leaf "Hello, world!"
-                    |> Html.Parser.nodeToString
+                    |> Html.Parser.nodeToString identity
                     |> Expect.equal "Hello, world!"
+        , test "number" <|
+            \_ ->
+                Leaf 5
+                    |> Html.Parser.nodeToString String.fromFloat
+                    |> Expect.equal "5"
         ]
 
 
@@ -197,6 +253,7 @@ suite : Test
 suite =
     describe "HtmlParser"
         [ textNodeTests
+        , complexObjTests
         , nodeTests
         , nodeToStringTests
         , commentTests

@@ -24,7 +24,6 @@ import Dict
 import Hex
 import Html.Parser.NamedCharacterReferences as NamedCharacterReferences
 import Parser exposing ((|.), (|=), Parser)
-import Debug exposing (toString)
 
 
 {-| Run the parser!
@@ -34,12 +33,8 @@ import Debug exposing (toString)
 
 -}
 run : String -> Result (List Parser.DeadEnd) (List (Node String))
-run str =
-    if String.isEmpty str then
-        Ok []
-
-    else
-        Parser.run (oneOrMore "node" (node identity (++) "")) str
+run input =
+    runComplex identity (++) "" input
 
 {-| Run the parser!
 
@@ -47,17 +42,17 @@ run str =
     -- => Ok [ Element "div" [] [ Element "p" [] [ Leaf 5 ] ] ]
 
 -}
-runComplex : String
-           -> (String -> a)
+runComplex : (String -> a)
            -> (a -> a -> a)
            -> a
+           -> String
            -> Result (List Parser.DeadEnd) (List (Node a))
-runComplex input convert combine init =
+runComplex convert combine empty input =
     if String.isEmpty input then
         Ok []
 
     else
-        Parser.run (oneOrMore "node" (node convert combine init)) input
+        Parser.run (oneOrMore "node" (node convert combine empty)) input
 
 
 -- Node
@@ -91,11 +86,11 @@ You can use this in your own parser to add support for HTML 5.
 
 -}
 node : (String -> a) -> (a -> a -> a) -> a -> Parser (Node a)
-node convert combine init =
+node convert combine empty =
     Parser.oneOf
-        [ leaf convert combine init
+        [ leaf convert combine empty
         , comment
-        , element convert combine init
+        , element convert combine empty
         ]
 
 
@@ -111,15 +106,15 @@ For instance:
 Produces `<a href="https://elm-lang.org">Elm</a>`.
 
 -}
-nodeToString : Node a -> String
-nodeToString node_ =
+nodeToString : (a -> String) -> Node a -> String
+nodeToString toStr node_ =
     let
         attributeToString ( attr, value ) =
             attr ++ "=\"" ++ value ++ "\""
     in
     case node_ of
         Leaf leaf_ ->
-            toString leaf_
+            toStr leaf_
 
         Element name attributes children ->
             let
@@ -145,7 +140,7 @@ nodeToString node_ =
                     , name
                     , maybeAttributes
                     , ">"
-                    , String.join "" (List.map nodeToString children)
+                    , String.join "" (List.map (nodeToString toStr) children)
                     , "</"
                     , name
                     , ">"
@@ -160,13 +155,13 @@ nodeToString node_ =
 
 
 leaf : (String -> a) -> (a -> a -> a) -> a -> Parser (Node a)
-leaf convert combine initial=
+leaf convert combine empty =
     Parser.oneOf
         [ Parser.map convert (Parser.getChompedString (chompOneOrMore (\c -> c /= '<' && c /= '&')))
         , Parser.map convert characterReference
         ]
         |> oneOrMore "leaf element"
-        |> Parser.map (Leaf << List.foldl combine initial)
+        |> Parser.map (Leaf << List.foldr combine empty)
 
 
 characterReference : Parser String
